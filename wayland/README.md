@@ -3,7 +3,17 @@
 Wayland display and input driver, with support for keyboard, mouse and touchscreen.
 Keyboard support is based on libxkbcommon.
 
-> NOTE: current implementation only supports `wl_shell` shell with no decorations.
+Following shell are supported:
+
+* wl_shell (deprecated)
+* xdg_shell
+* IVI shell (ivi-application protocol)
+
+> xdg_shell and IVI shell require an extra build step; see section _Generate protocols_ below.
+
+
+Basic client-side window decorations (simple title bar, minimize and close buttons)
+are supported, while integration with desktop environments is not.
 
 
 ## Install headers and libraries
@@ -11,13 +21,26 @@ Keyboard support is based on libxkbcommon.
 ### Ubuntu
 
 ```
-sudo apt-get install libwayland-dev libxkbcommon-dev
+sudo apt-get install libwayland-dev libxkbcommon-dev libwayland-bin wayland-protocols
 ```
 
 ### Fedora
 
 ```
-sudo dnf install wayland-devel libxkbcommon-devel
+sudo dnf install wayland-devel libxkbcommon-devel wayland-utils wayland-protocols-devel
+```
+
+
+## Generate protocols
+
+Support for non-basic shells (i.e. other than _wl_shell_) requires additional
+source files to be generated before the first build of the project. To do so,
+navigate to the _wayland_ folder (the one which includes this file) and issue
+the following commands:
+
+```
+cmake .
+make
 ```
 
 
@@ -54,11 +77,12 @@ In "Project properties > C/C++ Build > Settings" set the followings:
 ## Init Wayland in LVGL
 
 1. In `main.c` `#incude "lv_drivers/wayland/wayland.h"`
-2. Enable the Wayland driver in `lv_drv_conf.h` with `USE_WAYLAND 1`
+2. Enable the Wayland driver in `lv_drv_conf.h` with `USE_WAYLAND 1` and
+   configure its features below, enabling at least support for one shell.
 3. `LV_COLOR_DEPTH` should be set either to `32` or `16` in `lv_conf.h`;
    support for `8` and `1` depends on target platform.
 4. After `lv_init()` call `lv_wayland_init()`
-5. Periodically call `lv_wayland_tick()` - ideally after `lv_timer_handler()`
+5. Periodically call `lv_wayland_cycle()` - ideally after `lv_timer_handler()`
 6. After `lv_deinit()` call `lv_wayland_deinit()`
 7. Add a display:
 ```c
