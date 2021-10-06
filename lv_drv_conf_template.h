@@ -174,6 +174,7 @@
  *---------------------------------------*/
 #ifndef USE_WAYLAND
 #  define USE_WAYLAND       0
+#endif
 
 #if USE_WAYLAND
 /* Support for client-side decorations */
