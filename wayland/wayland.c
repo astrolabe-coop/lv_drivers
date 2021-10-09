@@ -224,8 +224,11 @@ struct window
     struct input input;
 
     bool flush_pending;
+    bool cycled;
     bool shall_close;
     bool closed;
+
+    void (*ext_monitor_cb)(lv_disp_drv_t * disp_drv, uint32_t time, uint32_t px);
 };
 
 /*********************************
@@ -292,20 +295,25 @@ static void pointer_handle_enter(void *data, struct wl_pointer *pointer,
                                  wl_fixed_t sx, wl_fixed_t sy)
 {
     struct application *app = data;
-    struct input *input = wl_surface_get_user_data(surface);
     const char * cursor = "left_ptr";
 
-    app->pointer = input;
+    if (!surface)
+    {
+        app->pointer = NULL;
+        return;
+    }
+
+    app->pointer = wl_surface_get_user_data(surface);
 
     app->pointer->mouse.x = wl_fixed_to_int(sx);
     app->pointer->mouse.y = wl_fixed_to_int(sy);
 
-    switch (input->parent_type)
+    switch (app->pointer->parent_type)
     {
 #if LV_WAYLAND_CLIENT_SIDE_DECORATIONS
     case PARENT_IS_DECORATION:
 #if LV_WAYLAND_XDG_SHELL
-        if (input->window->xdg_toplevel)
+        if (app->pointer->window->xdg_toplevel)
         {
             cursor = "grabbing";
         }
@@ -331,9 +339,8 @@ static void pointer_handle_leave(void *data, struct wl_pointer *pointer,
                                  uint32_t serial, struct wl_surface *surface)
 {
     struct application *app = data;
-    struct input *input = wl_surface_get_user_data(surface);
 
-    if (app->pointer == input)
+    if (!surface || (app->pointer == wl_surface_get_user_data(surface)))
     {
         app->pointer = NULL;
     }
@@ -603,18 +610,24 @@ static void keyboard_handle_enter(void *data, struct wl_keyboard *keyboard,
                                   struct wl_array *keys)
 {
     struct application *app = data;
-    struct input *input = wl_surface_get_user_data(surface);
+    struct input *input;
 
-    app->keyboard = input;
+    if (!surface)
+    {
+        app->keyboard = NULL;
+    }
+    else
+    {
+        app->keyboard = wl_surface_get_user_data(surface);
+    }
 }
 
 static void keyboard_handle_leave(void *data, struct wl_keyboard *keyboard,
                                   uint32_t serial, struct wl_surface *surface)
 {
     struct application *app = data;
-    struct input *input = wl_surface_get_user_data(surface);
 
-    if (app->keyboard == input)
+    if (!surface || (app->keyboard == wl_surface_get_user_data(surface)))
     {
         app->keyboard = NULL;
     }
@@ -680,9 +693,14 @@ static void touch_handle_down(void *data, struct wl_touch *wl_touch,
                               int32_t id, wl_fixed_t x_w, wl_fixed_t y_w)
 {
     struct application *app = data;
-    struct input *input = wl_surface_get_user_data(surface);
 
-    app->touch = input;
+    if (!surface)
+    {
+        app->touch = NULL;
+        return;
+    }
+
+    app->touch = wl_surface_get_user_data(surface);
 
     app->touch->touch.x = wl_fixed_to_int(x_w);
     app->touch->touch.y = wl_fixed_to_int(y_w);
@@ -1432,6 +1450,74 @@ static void destroy_window(struct window *window)
 #endif
 }
 
+/**
+ * Dispath Wayland events and flush changes to server
+ */
+static void window_cycle(lv_disp_drv_t *disp_drv, uint32_t time, uint32_t px)
+{
+    struct window *window = disp_drv->user_data;
+    struct application *app = window->application;
+    bool shall_flush = app->cursor_flush_pending;
+
+    window->cycled = true;
+    if (window->shall_close)
+    {
+        destroy_window(window);
+        window->closed = true;
+        window->shall_close = false;
+        window->flush_pending = true;
+    }
+    else if (window->ext_monitor_cb)
+    {
+        window->ext_monitor_cb(disp_drv, time, px);
+    }
+
+    // If at least one window has not yet been cycled, stop here
+    struct window *a_window;
+    _LV_LL_READ(&app->window_ll, a_window)
+    {
+        if (!a_window->cycled)
+        {
+            return;
+        }
+    }
+
+    // Check if flush has to be performed and reset flush and cycle flags
+    _LV_LL_READ(&app->window_ll, a_window)
+    {
+        shall_flush |= a_window->flush_pending;
+        a_window->flush_pending = false;
+        a_window->cycled = false;
+    }
+
+    // Flush changes to Wayland compositor and read events from it
+    while (wl_display_prepare_read(app->display) != 0)
+    {
+        wl_display_dispatch_pending(app->display);
+    }
+
+    if (shall_flush)
+    {
+        wl_display_flush(app->display);
+        app->cursor_flush_pending = false;
+    }
+
+    wl_display_read_events(app->display);
+    wl_display_dispatch_pending(app->display);
+
+    // Check if at least one window is not closed
+    _LV_LL_READ(&app->window_ll, a_window)
+    {
+        if (!a_window->closed)
+        {
+            return;
+        }
+    }
+
+    // If all windows have been closed, terminate execution
+    exit(0);
+}
+
 /**********************
  *   GLOBAL FUNCTIONS
  **********************/
@@ -1573,6 +1659,9 @@ void lv_wayland_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t
             return;
         }
         disp_drv->user_data = window;
+        /* Replace monitor_cb callback, saving the current one for further use */
+        window->ext_monitor_cb = disp_drv->monitor_cb;
+        disp_drv->monitor_cb = window_cycle;
     }
     /* If window has been / is being closed, or is not visible, skip rendering */
     else if (window->closed || window->shall_close)
@@ -1624,50 +1713,6 @@ void lv_wayland_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t
     }
 
     lv_disp_flush_ready(disp_drv);
-}
-
-/**
- * Dispath Wayland events and flush changes to server
- */
-int lv_wayland_cycle(void)
-{
-    struct window *window = NULL;
-    int active_windows = 0;
-    bool shall_flush = false;
-
-    while (wl_display_prepare_read(application.display) != 0)
-    {
-        wl_display_dispatch_pending(application.display);
-    }
-
-    _LV_LL_READ(&application.window_ll, window)
-    {
-        if (window->shall_close)
-        {
-            destroy_window(window);
-            window->closed = true;
-            window->shall_close = false;
-        }
-        else if (!window->closed)
-        {
-            active_windows++;
-            if (window->flush_pending)
-            {
-                shall_flush = true;
-            }
-        }
-    }
-
-    if (shall_flush || application.cursor_flush_pending)
-    {
-        wl_display_flush(application.display);
-        application.cursor_flush_pending = false;
-    }
-
-    wl_display_read_events(application.display);
-    wl_display_dispatch_pending(application.display);
-
-    return active_windows;
 }
 
 /**

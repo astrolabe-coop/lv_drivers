@@ -47,7 +47,6 @@ extern "C" {
  **********************/
 void lv_wayland_init(void);
 void lv_wayland_deinit(void);
-int lv_wayland_cycle(void);
 void lv_wayland_flush(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_color_t * color_p);
 void lv_wayland_pointer_read(lv_indev_drv_t * drv, lv_indev_data_t * data);
 void lv_wayland_pointeraxis_read(lv_indev_drv_t * drv, lv_indev_data_t * data);
