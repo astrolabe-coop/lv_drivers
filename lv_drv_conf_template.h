@@ -178,16 +178,26 @@
 
 #if USE_WAYLAND
 /* Support for client-side decorations */
-#  define LV_WAYLAND_CLIENT_SIDE_DECORATIONS 1
+#  ifndef LV_WAYLAND_CLIENT_SIDE_DECORATIONS
+#    define LV_WAYLAND_CLIENT_SIDE_DECORATIONS 1
+#  endif
 /* Support for (deprecated) wl-shell protocol */
-#  define LV_WAYLAND_WL_SHELL 1
+#  ifndef LV_WAYLAND_WL_SHELL
+#    define LV_WAYLAND_WL_SHELL 1
+#  endif
 /* Support for xdg-shell protocol */
-#  define LV_WAYLAND_XDG_SHELL 0
+#  ifndef LV_WAYLAND_XDG_SHELL
+#    define LV_WAYLAND_XDG_SHELL 0
+#  endif
 /* Support for ivi-application protocol */
-#  define LV_WAYLAND_IVI_APPLICATION 0
+#  ifndef LV_WAYLAND_IVI_APPLICATION
+#    define LV_WAYLAND_IVI_APPLICATION 0
+#  endif
 /* Base ID for IVI surfaces (can be overwritten at runtime through
  * LV_WAYLAND_IVI_ID environemnt variable) */
-#  define LV_WAYLAND_IVI_ID_BASE 12345
+#  ifndef LV_WAYLAND_IVI_ID_BASE
+#    define LV_WAYLAND_IVI_ID_BASE 12345
+#  endif
 #endif
 
 /*----------------
