@@ -34,6 +34,7 @@ endmacro()
 set(WAYLAND_PROTOCOLS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/protocols")
 file(MAKE_DIRECTORY ${WAYLAND_PROTOCOLS_DIR})
 
+include_directories(${CMAKE_SOURCE_DIR})
 add_custom_target(generate_protocols ALL)
 
 wayland_generate("${WAYLAND_PROTOCOLS_BASE}/stable/xdg-shell/xdg-shell.xml" ${WAYLAND_PROTOCOLS_DIR} generate_protocols)
