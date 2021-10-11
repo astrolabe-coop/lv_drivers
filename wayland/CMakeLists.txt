@@ -27,7 +27,7 @@ macro(wayland_generate protocol_xml_file output_dir target)
     if(NOT EXISTS ${protocol_xml_file})
         message("Protocol XML file not found: " ${protocol_xml_file})
     else()
-        target_sources(${target} PRIVATE "${output_file_noext}.h" "${output_file_noext}.c")
+        set_property(TARGET ${target} APPEND PROPERTY SOURCES  "${output_file_noext}.h" "${output_file_noext}.c")
     endif()
 endmacro()
 
